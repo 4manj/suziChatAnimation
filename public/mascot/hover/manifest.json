@@ -1,0 +1,23 @@
+{
+  "id": "hover",
+  "atlas": "/mascot/hover/atlas.png",
+  "frames": 46,
+  "playbackFrames": 45,
+  "fps": 12,
+  "frameWidth": 256,
+  "frameHeight": 256,
+  "cols": 7,
+  "rows": 7,
+  "loop": true,
+  "entryFrame": 0,
+  "exitFrame": 0,
+  "enterRange": [0, 15],
+  "loopRange": [15, 31],
+  "exitRange": [31, 46],
+  "enterSpeed": 1.5,
+  "exitSpeed": 1.5,
+  "anchorPoint": {
+    "x": 128.0,
+    "y": 250
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "idle_2",
+  "atlas": "/mascot/idle_2/atlas.png",
+  "frames": 65,
+  "fps": 12,
+  "frameWidth": 256,
+  "frameHeight": 256,
+  "cols": 9,
+  "rows": 8,
+  "loop": true,
+  "entryFrame": 0,
+  "exitFrame": 0,
+  "anchorPoint": {
+    "x": 128.0,
+    "y": 250
+  },
+  "playbackFrames": 64
+}
