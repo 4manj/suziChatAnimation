@@ -23,6 +23,16 @@ Python asset pipeline (requires `.venv/` — rembg/PIL installed there):
     --motion-sec 3.6 --target-fps 12 --frame-size 256 [--no-pingpong]
 ```
 
+Deploy / hosting:
+
+```bash
+vercel --prod --yes   # deploys from this directory; project is already linked (.vercel/)
+```
+
+- GitHub: `github.com/4manj/suziChatAnimation` (public)
+- Live: `https://chatboxsuzi.vercel.app`
+- Project is CLI-linked (no GitHub auto-deploy configured). `.vercel/` is in `.gitignore` — the CLI auto-appends it on first link.
+
 ## Project context
 
 - **Working dir:** `/Users/aman/DRIVE D/chatbox_suzi/`
@@ -42,7 +52,7 @@ Python asset pipeline (requires `.venv/` — rembg/PIL installed there):
 
 | # | State | Mode | Behavior |
 |---|---|---|---|
-| 1 | `send_success` | one-shot, **terminal** | ~3.6s. Character plays a "yay" reaction, arms spread, then crouches down so only her antler tips dip below the chat-box edge. Unmounts at the end. Once entered, nothing preempts it. |
+| 1 | `send_success` | one-shot, **terminal** | ~1.4s @ 1× playback. Character plays a "yay" reaction, arms spread, then crouches down so only her antler tips dip below the chat-box edge; a CSS opacity fade in `Mascot.tsx` dissolves her over the same window. Unmounts at `SEND_SUCCESS_MS / playbackSpeed`. Nothing preempts it — not even reduced motion. |
 | 2 | `hover` | 3-phase (enter → loop → exit) | While pointer is over chat input. Plays one-shot enter, then ping-pongs the loop range, then plays one-shot exit on leave. |
 | 3 | `idle` | loop, **atomic** | 3 variants. The current variant plays one full atlas cycle before anything else (hover or another idle) can take over. `send_success` is the only preempt. |
 
@@ -69,7 +79,9 @@ any state ──onSend──► send_success ──(SEND_SUCCESS_MS)──► un
 - **Idle atomicity:** once an idle atlas starts playing, it runs to the end of its loop before hover or another idle variant can take over. `useMascotFSM.scheduleEvaluate` schedules a timer at `elapsed → totalDuration` and only re-picks at loop end. `send_success` is the one exception (it bypasses the scheduler via `transitionTo` directly in `onSend`).
 - **Hover exit phase:** leaving `hover` does not swap manifests immediately. `hoverExiting` flips true → SpriteAtlas plays `exitRange` once → fires `onHoverExitComplete` → FSM transitions to `idle_1`. `send_success` still preempts mid-exit.
 - **Dwell (non-idle only):** every non-idle state must play ≥ `MIN_DWELL_MS` (300 ms) before it can be interrupted. Exception: `send_success` always preempts.
-- **Reduced motion (`prefers-reduced-motion: reduce`):** mascot locks to `idle_1`, no transitions, no rotation, no anchor motion.
+- **Unmount timer scales with playbackSpeed:** `send_success` unmounts at `SEND_SUCCESS_MS / playbackSpeed`. The CSS fade in `Mascot.tsx` uses the same scaled duration so the dev-panel 0.5× / 0.25× slowdowns keep the fade and the unmount aligned.
+- **`onSend` is idempotent while terminal:** a second `onSend` during `send_success` is a no-op — it does not reset `stateStartedAt` and does not extend the unmount window.
+- **Reduced motion (`prefers-reduced-motion: reduce`):** mascot locks to `idle_1`, no transitions, no rotation, no anchor motion. The reduced-motion snap is gated *after* the `send_success` branch in the main effect so flipping reduced motion on mid-terminal never rips the mascot back to idle before unmount.
 - **Pointer events:** mascot layer has `pointer-events: none`. Never steals clicks from the input.
 
 ### Idle rotation rules (in `lib/mascot/fsm.ts`)
@@ -133,6 +145,7 @@ Atlases currently shipping and their trims (all 256×256 frames):
 - **Manifest-id remount:** `Mascot.tsx` keys `SpriteAtlas` on `asset.manifest.id`. State changes that swap manifests force a remount → the new atlas starts at its `entryFrame` (or `enterRange[0]` for phased).
 - **Atlas preloader:** `Mascot.tsx` renders hidden `<img>` tags for every atlas URL on mount so state swaps never trigger a mid-transition fetch.
 - **Phased playback:** `SpriteAtlas` tracks an internal `phase: "enter" | "loop" | "exit" | "done"` via ref. `phaseDuration()` is recomputed per rAF tick so enter/exit-speed kicks in at the boundary.
+- **Send-success fade:** terminal state wraps the atlas in a CSS `@keyframes suzi-send-fade` (opacity 1 → 0 over the second half of the clip) declared in `Mascot.tsx`. Duration = `SEND_SUCCESS_MS / playbackSpeed` so the fade and the unmount timer land together.
 - CSS transforms are used **only** for anchor motion (idle bob, hover lift) in the placeholder path. Real atlases rely entirely on pre-rendered frames for body motion; transforms never touch expressions or gestures.
 
 ## Canonical reference (base canvas)
@@ -215,7 +228,9 @@ Mascot sits at **top-right of chat box, overhanging upward** (controlled via Tai
 
 ## Dev harness
 
-Floating side panel at `components/mascot/DevPanel.tsx` (hidden in prod — gated on `process.env.NODE_ENV !== 'production'`):
+`components/mascot/DevPanel.tsx` exists but is **not currently mounted** in `app/page.tsx`. The component is kept around because it reads from `MascotFSMApi` only — harmless to leave, easy to re-mount when iterating. Re-add `<DevPanel fsm={fsm} />` next to `<Mascot>` in `page.tsx` to use it.
+
+When mounted it offers (hidden in prod via `process.env.NODE_ENV !== 'production'`):
 
 - Force-state buttons: `idle_1 / idle_2 / idle_3 / hover / send_success`.
 - Event simulator: `onHover`, `onHoverLeave`, `onSend`.
@@ -227,6 +242,8 @@ Floating side panel at `components/mascot/DevPanel.tsx` (hidden in prod — gate
 ## Portability contract (toward `suzi-fe`)
 
 Everything under `lib/mascot/` and `components/mascot/` is the portable core. Move that tree into `suzi-fe/packages/mascot` as-is, add a `package.json` with the workspace name, and consume from `@suzi/web` or `@suzi/chat`. No code inside `lib/mascot/` or `components/mascot/` references this standalone app directly.
+
+One caveat for embedding: **`useMascotStore` in `useMascotFSM.ts` is a module-level singleton**. After `send_success` unmounts (`isMounted:false`), the store persists that dead terminal state across React parent remounts. The hook has a one-shot `useEffect(..., [])` that detects `!isMounted && currentState === "send_success"` on mount and resets the animation-relevant fields (preserving dev-panel knobs: `playbackSpeed`, `reducedMotionPreview`, `controls`). If `suzi-fe` ends up with multiple Mascot mount points sharing the same module, consider making the store factory-per-instance instead.
 
 ## File layout
 
@@ -268,7 +285,9 @@ chatbox_suzi/
 
 - **Idle atomicity** (above) replaces the old priority-based preemption for idle; no state flip mid-cycle.
 - **Phased hover exit** keeps the manifest stable while `hoverExiting` is true; the atlas finishes its exit frames before manifest swap happens.
-- **`send_success` terminal:** `canTransition` returns false for any `from === "send_success"`; `pickDesiredState` never returns away from it.
+- **Re-hover self-heal during exit:** if the user re-hovers after `onHoverLeave` but before the exit frames finish, the FSM clears `hoverExiting`. `SpriteAtlas` watches `exitReqRef` inside the rAF tick and, if the flag drops to false while `phase === "exit"` (or while in the follow-on `done` phase), snaps `phase` back to `loop` at `loopRange[0]`. Without this the atlas would freeze on the final exit frame while the FSM still thought it was in hover.
+- **`send_success` terminal:** `canTransition` returns false for any `from === "send_success"`; `pickDesiredState` never returns away from it; `onSend` is a no-op when already terminal.
+- **Reduced-motion cannot preempt terminal:** the main effect schedules the `send_success` unmount timer *before* the reduced-motion snap branch, so toggling reduced motion mid-terminal doesn't interrupt the goodbye.
 - **Narrow zustand selectors** in `useMascotFSM` — each field subscribes independently so unrelated store updates don't re-render the hook.
 - **Single active state at any time.** No state stack, no queued transitions.
 

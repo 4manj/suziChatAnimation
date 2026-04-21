@@ -21,3 +21,4 @@ popcorn_out
 .env
 .env.*
 !.env.example
+.vercel

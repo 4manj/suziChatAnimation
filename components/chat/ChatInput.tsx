@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 type ChatInputProps = {
   value: string;
@@ -37,12 +37,29 @@ function SendIcon() {
 
 export function ChatInput({ value, onChange, onHover, onHoverLeave, onSend }: ChatInputProps) {
   const inputId = useId();
+  const [pointerInside, setPointerInside] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+
+  // Mascot stays in hover while the user is engaged with the input: pointer
+  // over the shell, input focused (keyboard users), or any typed content —
+  // so the hover reaction persists while composing, even if the mouse drifts
+  // off the chat box.
+  const engaged = pointerInside || inputFocused || value.length > 0;
+  // Seeded to false so a mount with a non-empty `value` (e.g. draft restore)
+  // still emits the initial onHover edge on first effect.
+  const prevEngagedRef = useRef(false);
+  useEffect(() => {
+    if (prevEngagedRef.current === engaged) return;
+    prevEngagedRef.current = engaged;
+    if (engaged) onHover();
+    else onHoverLeave();
+  }, [engaged, onHover, onHoverLeave]);
 
   return (
     <div
       className="chat-shell relative z-30 w-full max-w-[1000px]"
-      onMouseEnter={onHover}
-      onMouseLeave={onHoverLeave}
+      onMouseEnter={() => setPointerInside(true)}
+      onMouseLeave={() => setPointerInside(false)}
     >
       <div className="chat-surface flex flex-col gap-4 px-5 pt-5 pb-3 sm:px-6 sm:pt-6">
         <label htmlFor={inputId} className="sr-only">
@@ -54,8 +71,8 @@ export function ChatInput({ value, onChange, onHover, onHoverLeave, onSend }: Ch
           autoComplete="off"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          onFocus={onHover}
-          onBlur={onHoverLeave}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
