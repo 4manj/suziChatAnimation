@@ -18,12 +18,12 @@ export const IDLE_MAX_MS = 12000;
 //     to idle_2 or idle_3 is forced.
 //   - Each state plays for exactly one atlas-loop length to avoid cutting any
 //     round-trip animation mid-motion.
-export const IDLE_1_MAX_CONSECUTIVE = 3;
+export const IDLE_1_MAX_CONSECUTIVE = 2;
 
 const idleWeights: Record<"idle_1" | "idle_2" | "idle_3", number> = {
-  idle_1: 50,
-  idle_2: 20,
-  idle_3: 60,
+  idle_1: 45,
+  idle_2: 15,
+  idle_3: 30,
 };
 
 type Candidate = {
