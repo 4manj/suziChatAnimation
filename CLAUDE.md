@@ -87,7 +87,7 @@ any state ──onSend──► send_success ──(SEND_SUCCESS_MS)──► un
 ### Idle rotation rules (in `lib/mascot/fsm.ts`)
 
 - `idle_2` and `idle_3` are **always followed by** `idle_1` — no back-to-back non-idle_1.
-- `idle_1` can repeat up to `IDLE_1_MAX_CONSECUTIVE = 2` times; after that, the next pick is forced from `{idle_2, idle_3}` (weighted).
+- `idle_1` can repeat up to `IDLE_1_MAX_CONSECUTIVE = 1` time; after that, the next pick is forced from `{idle_2, idle_3}` (weighted).
 - Weights: `{idle_1: 45, idle_2: 15, idle_3: 30}` (idle_2:idle_3 ratio 1:2).
 - Each idle state plays for exactly one atlas-loop length (`playbackFrames / fps`) to avoid cutting a round-trip animation mid-motion.
 
